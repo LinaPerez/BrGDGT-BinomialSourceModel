@@ -1,0 +1,61 @@
+---
+title: "Binomial_Model_brGDGTs_Source"
+author: "Lina C. Perez-Angel"
+date: "2025-10-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Packages to install
+```{r}
+library(logistf)
+library(MASS)
+library(plyr)
+library(plotly)
+library(tidyverse)
+```
+
+
+#load data
+```{r}
+#remember to always set the directory in the same folder as the data files* use setwd("~/yourdocuments/file/")
+
+#load data use for the binomial logistic model. Use most relevant fractional abundances (Ia, Ib, Ic, IIa, IIa', IIb, IIb', IIIa, IIIa') of lakes deeper than 8m from Zhao et al. (2023) and tropical soils from Pérez-Angel et al. (2020). In column 'origin' 1 = lake and 0 = soil. 
+FA_lake_soil_brGDGTs <- read.table("soil_lake_brGDGTs.txt", header = T, sep = "\t") 
+
+#data that we want to use the model to predict the brGDGT-source distribution (lake or soil or both). In this case we will use the Funza-II core samples from Pérez-Angel et al. (2025)
+Funza_brGDGTs <- read.table("FunzaII_FA.txt", header = T, sep = "\t") 
+```
+
+#Binomial logistic model
+```{r, warning=FALSE}
+#clear data, make sure there is no NAs
+FA_lake_soil_brGDGTs[is.na(FA_lake_soil_brGDGTs)] <- 0
+FA_lake_soil_brGDGTs[ , apply(FA_lake_soil_brGDGTs, 2, var) != 0]
+
+#use the logistf package to find a logistic binomial regression that can give us a model to predict the probability of being a lake-brGDGT or a soil-brGDGT
+log_model_cal <- logistf(origin~., data = FA_lake_soil_brGDGTs, family=binomial) #logistic regression, origin: 1 = lake, 0 = soils. If possible use 7 decimal points.
+bestmodel <- stepAIC(log_model_cal) #get the best (parsimonious) model using AIC
+
+yprediction <- predict(bestmodel, FA_lake_soil_brGDGTs, type = "response") #now we want to check how well the model can predict the original data, we use the type "response" because we want a probability distribution of the source 
+
+FA_lake_soil_brGDGTs['ypred'] <- yprediction #add predicted source to the original dataframe 
+write.csv(FA_lake_soil_brGDGTs, "brGDGT_source_prob.csv") #create new file with the probability distribution for modern lakes and soils use in the model
+
+plot(FA_lake_soil_brGDGTs$ypred, FA_lake_soil_brGDGTs$origin) #plot the original source vs. what the model predicted
+```
+
+#Predic Funza-II samples brGDGT-source 
+```{r}
+Funza_source <-predict(bestmodel, data.frame(Funza_brGDGTs), type = "response") #use predict function from logistf, we use the type "response" because we want a probability distribution of the source 
+
+Funza_source <- round(Funza_source, digits = 2) 
+Funza_brGDGTs['source']<- Funza_source #add prediction to each sample to estimate a mixed model temperature based on the mixture of sources between soil-brGDGT and lake-brGDGT
+
+write.csv(Funza_brGDGTs, "Funza_source_prob.csv") #create new file
+
+```
+
